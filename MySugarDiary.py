@@ -115,7 +115,7 @@ if not st.session_state.data.empty:
                 st.session_state.data.at[selected_index, "Time of Reading"] = edit_time.strftime("%I:%M %p")
                 st.session_state.data.at[selected_index, "Timeframe"] = edit_timeframe
                 st.session_state.data.at[selected_index, "Sugar Level (mg/dL)"] = int(edit_sugar)
-                st.session_state.at[selected_index, "Bolus Dose (Units)"] = float(edit_bolus)
+                st.session_state.data.at[selected_index, "Bolus Dose (Units)"] = float(edit_bolus)
                 st.session_state.data.at[selected_index, "Basal Dose (Units)"] = float(edit_basal)
                 st.session_state.data.at[selected_index, "Food Eaten"] = edit_food
                 
