@@ -3,19 +3,14 @@ import pandas as pd
 from datetime import datetime
 import os
 
-# --- IMPORTANT NOTE FOR USER ---
-# To make data completely persistent across both devices seamlessly 
-# without resetting, ensure you connect a persistent database.
-# For this version, we use an optimized local/cloud hybrid state 
-# that keeps all data editable in real-time.
-
 # --- FILE CONFIGURATION ---
 DB_FILE = "sugar_tracker.csv"
 
 def load_data():
     if os.path.exists(DB_FILE):
         df = pd.read_csv(DB_FILE)
-        df['Sugar Level (mg/dL)'] = df['Sugar Level (mg/dL)'].fillna(100).astype(int)
+        # Keep sugar level as a string/mixed type so it can store "—" for unchecked entries
+        df['Sugar Level (mg/dL)'] = df['Sugar Level (mg/dL)'].fillna("—").astype(str)
         df['Bolus Dose (Units)'] = df['Bolus Dose (Units)'].fillna(0.0).astype(float)
         df['Basal Dose (Units)'] = df['Basal Dose (Units)'].fillna(0.0).astype(float)
         df['Food Eaten'] = df['Food Eaten'].fillna("None").astype(str)
@@ -43,10 +38,14 @@ with st.sidebar.form(key='log_form', clear_on_submit=True):
     log_date = st.date_input("Date", datetime.now())
     log_time = st.time_input("Time of Reading", datetime.now().time())
     timeframe = st.selectbox("Timeframe", ["Morning", "Mid-Morning", "Lunch", "Evening", "Dinner", "Bedtime"])
+    
+    # 🌟 NEW FEATURE: NOT CHECKED OPTION
+    not_checked = st.checkbox("Not Checked", value=False, help="Check this if you didn't test your blood sugar this time.")
     sugar = st.number_input("Sugar Level (mg/dL)", min_value=0, max_value=600, value=100, step=1)
+    
     bolus = st.number_input("Bolus Insulin Dose (Units)", min_value=0.0, max_value=100.0, value=0.0, step=0.5)
     basal = st.number_input("Basal Insulin Dose (Units)", min_value=0.0, max_value=100.0, value=0.0, step=0.5)
-    food = st.text_area("Food Eaten", placeholder="e.g., 2 chapatis, dal, salad")
+    food = st.text_area("Food Eaten", placeholder="e.g., Evening tea with biscuits")
     
     submit_button = st.form_submit_button(label='Save Log Entry')
 
@@ -55,7 +54,7 @@ if submit_button:
         "Date": log_date.strftime("%Y-%m-%d"),
         "Time of Reading": log_time.strftime("%I:%M %p"),
         "Timeframe": timeframe,
-        "Sugar Level (mg/dL)": int(sugar),
+        "Sugar Level (mg/dL)": "—" if not_checked else str(int(sugar)), # Stores a dash if unchecked
         "Bolus Dose (Units)": float(bolus),
         "Basal Dose (Units)": float(basal),
         "Food Eaten": food if food else "None"
@@ -70,10 +69,9 @@ st.header("📋 Historical Logs")
 
 if not st.session_state.data.empty:
     
-    # 🛠️ UNIVERSAL EDIT SECTION (Brought back & fully unlocked)
+    # 🛠️ UNIVERSAL EDIT SECTION
     with st.expander("✏️ Click here to Edit / Modify ANY Existing Entry"):
         df_display = st.session_state.data.copy()
-        # Create a unique label for dropdown selection
         df_display['Label'] = df_display['Date'] + " | " + df_display['Timeframe'] + " (" + df_display['Time of Reading'].astype(str) + ")"
         
         selected_label = st.selectbox("Select the entry sequence you want to modify:", df_display['Label'].tolist())
@@ -99,7 +97,14 @@ if not st.session_state.data.empty:
         # Row 2: Level & Food modifications
         ec4, ec5, ec6 = st.columns(3)
         with ec4:
-            edit_sugar = st.number_input("Modify Sugar Level (mg/dL)", min_value=0, max_value=600, value=int(current_row["Sugar Level (mg/dL)"]), key="edit_sug_field")
+            # Check if the existing record was "Not Checked"
+            is_currently_unchecked = current_row["Sugar Level (mg/dL)"] == "—"
+            edit_not_checked = st.checkbox("Modify as 'Not Checked'", value=is_currently_unchecked, key="edit_nc_field")
+            
+            # Default helper value for input if it was originally unchecked
+            default_sugar_val = 100 if is_currently_unchecked else int(float(current_row["Sugar Level (mg/dL)"]))
+            edit_sugar = st.number_input("Modify Sugar Level (mg/dL)", min_value=0, max_value=600, value=default_sugar_val, key="edit_sug_field")
+            
         with ec5:
             edit_bolus = st.number_input("Modify Bolus (Units)", min_value=0.0, max_value=100.0, value=float(current_row["Bolus Dose (Units)"]), step=0.5, key="edit_bol_field")
         with ec6:
@@ -114,7 +119,7 @@ if not st.session_state.data.empty:
                 st.session_state.data.at[selected_index, "Date"] = edit_date.strftime("%Y-%m-%d")
                 st.session_state.data.at[selected_index, "Time of Reading"] = edit_time.strftime("%I:%M %p")
                 st.session_state.data.at[selected_index, "Timeframe"] = edit_timeframe
-                st.session_state.data.at[selected_index, "Sugar Level (mg/dL)"] = int(edit_sugar)
+                st.session_state.data.at[selected_index, "Sugar Level (mg/dL)"] = "—" if edit_not_checked else str(int(edit_sugar))
                 st.session_state.data.at[selected_index, "Bolus Dose (Units)"] = float(edit_bolus)
                 st.session_state.data.at[selected_index, "Basal Dose (Units)"] = float(edit_basal)
                 st.session_state.data.at[selected_index, "Food Eaten"] = edit_food
@@ -134,12 +139,19 @@ if not st.session_state.data.empty:
     # Dynamic Dashboard Display (Newest first)
     st.dataframe(st.session_state.data.iloc[::-1], use_container_width=True)
     
-    # Visual Analytics Graph
+    # Visual Analytics Graph (Slightly altered to skip blank records safely)
     st.subheader("📈 Trend Line")
     chart_data = st.session_state.data.copy()
-    chart_data['Datetime'] = pd.to_datetime(chart_data['Date'] + ' ' + chart_data['Time of Reading'])
-    chart_data = chart_data.sort_values('Datetime')
-    st.line_chart(data=chart_data, x='Datetime', y='Sugar Level (mg/dL)')
+    # Filter out entries where sugar wasn't checked so the graph line doesn't break
+    chart_data = chart_data[chart_data['Sugar Level (mg/dL)'] != "—"]
+    
+    if not chart_data.empty:
+        chart_data['Sugar Level (mg/dL)'] = chart_data['Sugar Level (mg/dL)'].astype(int)
+        chart_data['Datetime'] = pd.to_datetime(chart_data['Date'] + ' ' + chart_data['Time of Reading'])
+        chart_data = chart_data.sort_values('Datetime')
+        st.line_chart(data=chart_data, x='Datetime', y='Sugar Level (mg/dL)')
+    else:
+        st.info("Log some actual numerical sugar levels to generate the trend graph!")
     
 else:
     st.info("No logs found. Use the panel on the left to add your first reading!")
