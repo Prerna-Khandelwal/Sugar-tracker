@@ -105,4 +105,50 @@ if not st.session_state.data.empty:
         ec4, ec5, ec6 = st.columns(3)
         with ec4:
             is_currently_unchecked = current_row["Sugar Level (mg/dL)"] == "—"
-            edit_not_checked = st.checkbox("Modify as 'Not Checked'", value=is_currently_
+            edit_not_checked = st.checkbox("Modify as 'Not Checked'", value=is_currently_unchecked, key=f"nc_{selected_id}")
+            default_sugar_val = 100 if is_currently_unchecked else int(float(current_row["Sugar Level (mg/dL)"]))
+            edit_sugar = st.number_input("Modify Sugar Level (mg/dL)", min_value=0, max_value=600, value=default_sugar_val, key=f"s_{selected_id}")
+        with ec5:
+            edit_bolus = st.number_input("Modify Bolus (Units)", min_value=0.0, max_value=100.0, value=float(current_row["Bolus Dose (Units)"]), step=0.5, key=f"bo_{selected_id}")
+        with ec6:
+            edit_basal = st.number_input("Modify Basal (Units)", min_value=0.0, max_value=100.0, value=float(current_row["Basal Dose (Units)"]), step=0.5, key=f"ba_{selected_id}")
+            
+        edit_food = st.text_input("Modify Food Eaten", value=str(current_row["Food Eaten"]), key=f"f_{selected_id}")
+        
+        col_btn1, col_btn2 = st.columns([1, 5])
+        with col_btn1:
+            if st.button("Save Changes", type="primary", key=f"btn_save_{selected_id}"):
+                st.session_state.data.at[real_index, "Date"] = edit_date.strftime("%Y-%m-%d")
+                st.session_state.data.at[real_index, "Time of Reading"] = edit_time.strftime("%I:%M %p")
+                st.session_state.data.at[real_index, "Timeframe"] = edit_timeframe
+                st.session_state.data.at[real_index, "Sugar Level (mg/dL)"] = "—" if edit_not_checked else str(int(edit_sugar))
+                st.session_state.data.at[real_index, "Bolus Dose (Units)"] = float(edit_bolus)
+                st.session_state.data.at[real_index, "Basal Dose (Units)"] = float(edit_basal)
+                st.session_state.data.at[real_index, "Food Eaten"] = edit_food
+                
+                save_data(st.session_state.data)
+                st.success("Entry updated successfully!")
+                st.rerun()
+        with col_btn2:
+            if st.button("🗑️ Delete This Entire Entry", type="secondary", key=f"btn_del_{selected_id}"):
+                st.session_state.data = st.session_state.data.drop(real_index).reset_index(drop=True)
+                save_data(st.session_state.data)
+                st.warning("Entry deleted.")
+                st.rerun()
+
+    st.write("---")
+    
+    # Hide the system ID column from the user view so it looks tidy
+    clean_view = st.session_state.data.drop(columns=["ID"], errors="ignore")
+    st.dataframe(clean_view.iloc[::-1], use_container_width=True)
+    
+    # Trend line
+    st.subheader("📈 Trend Line")
+    chart_data = st.session_state.data.copy()
+    chart_data = chart_data[chart_data['Sugar Level (mg/dL)'] != "—"]
+    
+    if not chart_data.empty:
+        chart_data['Sugar Level (mg/dL)'] = chart_data['Sugar Level (mg/dL)'].astype(int)
+        chart_data['Datetime'] = pd.to_datetime(chart_data['Date'] + ' ' + chart_data['Time of Reading'])
+        chart_data = chart_data.sort_values('Datetime')
+        st.line_chart(data=chart_data, x='Datetime', y='Sugar Level (mg/dL)')
