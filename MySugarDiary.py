@@ -64,7 +64,7 @@ st.write("🟢 Database Active | Connected securely across Mobile & PC.")
 st.sidebar.header("➕ Add New Reading")
 with st.sidebar.form(key='log_form', clear_on_submit=True):
     log_date = st.date_input("Date", datetime.now())
-   log_time = st.time_input("Time of Reading", datetime.now(ZoneInfo("Asia/Kolkata")).time()) 
+    log_time = st.time_input("Time of Reading", datetime.now(ZoneInfo("Asia/Kolkata")).time()) 
     timeframe = st.selectbox("Timeframe", ["Morning", "Mid-Morning", "Lunch", "Evening", "Dinner", "Bedtime"])
     
     not_checked = st.checkbox("Not Checked", value=False)
