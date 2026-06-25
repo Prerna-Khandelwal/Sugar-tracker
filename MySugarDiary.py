@@ -1,25 +1,22 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo  # 👈 ADD THIS LINE
+from zoneinfo import ZoneInfo
 import requests
 import json
 import time
 
-# --- 1. CORE PROTECTION & DATABASE GATEWAY ---
+# --- 1. CORE PROTECTION & DATABASE CONFIGURATION ---
 PASSWORD = "131984"  # 👈 Update to your personal secure login key!
 
-# 👈 Paste the exact Google Web App Deployment URL you copied from Step 1 here!
-WEB_APP_URL = "https://script.google.com/macros/s/XXXXXX/exec" 
+# 👈 Paste the exact Google Web App Deployment URL you copied from Apps Script!
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxDzIDjbO4o1VF04STIpDOUScNkOUcKZ03Lqd6bIwwGj8lrCPNIsg4CQdd55PjpPrAz/exec" 
 
-# Derived read URL for clean background data pulling
-SPREADSHEET_ID = WEB_APP_URL.split("/s/")[1].split("/exec")[0] if "docs.google" in WEB_APP_URL else ""
-# Direct URL conversion to fetch data safely as CSV
-if "script.google.com" in WEB_APP_URL:
-    # Alternative direct fallback path calculation if you just want to track via shared CSV
-    DATA_URL = WEB_APP_URL.replace("/exec", "") # Temporary baseline configuration marker
-else:
-    DATA_URL = f"https://docs.google.com/spreadsheets/d/{WEB_APP_URL}/gviz/tq?tqx=out:csv"
+# 👈 Paste your exact Google Spreadsheet ID here so reading never fails!
+SPREADSHEET_ID = "https://docs.google.com/spreadsheets/d/1ZsGKQk5dOVi3gbg5L9fMY9R9xDo48r971diLoxO0J7w/edit?gid=0#gid=0" 
+
+# Direct fallback URL to read data as a raw CSV structure
+DATA_URL = f"https://docs.google.com/spreadsheets/d/1ZsGKQk5dOVi3gbg5L9fMY9R9xDo48r971diLoxO0J7w/edit?usp=sharing"
 
 st.set_page_config(page_title="Cloud Sugar Journal", layout="wide")
 
@@ -41,20 +38,12 @@ if not st.session_state.authenticated:
 # --- 3. DATABASE SYNC ENGINE ---
 def load_data():
     try:
-        # 🌟 Automatically read live data from your Google Sheet on startup
-        # We clean the URL to make it a direct CSV download link
-        sheet_csv_url = WEB_APP_URL.replace("/exec", "/exec?action=read") 
-        
-        # If your Web App script isn't handling reading yet, we fallback to the public CSV export:
-        # A bulletproof way to read it directly using your SPREADSHEET_ID:
-        direct_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv"
-        
-        df = pd.read_csv(direct_url)
-        
+        # Pull directly from the raw Google CSV export endpoint
+        df = pd.read_csv(DATA_URL)
         if df.empty or "ID" not in df.columns:
             return pd.DataFrame(columns=["ID", "Date", "Time of Reading", "Timeframe", "Sugar Level (mg/dL)", "Bolus Dose (Units)", "Basal Dose (Units)", "Food Eaten"])
             
-        # Clean up column data types so they display beautifully
+        # Standardize types for stable local filtering and display
         df['ID'] = df['ID'].astype(str)
         df['Sugar Level (mg/dL)'] = df['Sugar Level (mg/dL)'].fillna("—").astype(str)
         df['Bolus Dose (Units)'] = df['Bolus Dose (Units)'].fillna(0.0).astype(float)
@@ -62,10 +51,8 @@ def load_data():
         df['Food Eaten'] = df['Food Eaten'].fillna("None").astype(str)
         return df
     except Exception as e:
-        # Fallback to local memory if the internet connection dips momentarily
-        if "cloud_df" not in st.session_state:
-            st.session_state.cloud_df = pd.DataFrame(columns=["ID", "Date", "Time of Reading", "Timeframe", "Sugar Level (mg/dL)", "Bolus Dose (Units)", "Basal Dose (Units)", "Food Eaten"])
-        return st.session_state.cloud_df
+        # Fallback empty dataframe if connection fails entirely
+        return pd.DataFrame(columns=["ID", "Date", "Time of Reading", "Timeframe", "Sugar Level (mg/dL)", "Bolus Dose (Units)", "Basal Dose (Units)", "Food Eaten"])
 
 def sync_cloud(payload):
     try:
@@ -73,18 +60,27 @@ def sync_cloud(payload):
     except Exception:
         pass
 
+# Force data refresh on fresh login session
 if 'data' not in st.session_state:
     st.session_state.data = load_data()
 
 # --- 4. MAIN INTERFACE LAYOUT ---
 st.title("🩸 Cloud Blood Sugar & Insulin Tracker")
-st.write("🟢 Database Active | Connected securely across Mobile & PC.")
+st.write("🟢 Database Synced | Connected securely across Mobile & PC.")
 
 # --- SIDEBAR: NEW READING ENTRIES ---
 st.sidebar.header("➕ Add New Reading")
+
+# 🌟 FIX: Store the initial base time outside the form context so it stays stable
+if "initial_time" not in st.session_state:
+    st.session_state.initial_time = datetime.now(ZoneInfo("Asia/Kolkata")).time()
+
 with st.sidebar.form(key='log_form', clear_on_submit=True):
-    log_date = st.date_input("Date", datetime.now())
-    log_time = st.time_input("Time of Reading", datetime.now(ZoneInfo("Asia/Kolkata")).time()) 
+    log_date = st.date_input("Date", datetime.now(ZoneInfo("Asia/Kolkata")))
+    
+    # Defaults to India local time, but accepts manual override cleanly!
+    log_time = st.time_input("Time of Reading", value=st.session_state.initial_time)
+    
     timeframe = st.selectbox("Timeframe", ["Morning", "Mid-Morning", "Lunch", "Evening", "Dinner", "Bedtime"])
     
     not_checked = st.checkbox("Not Checked", value=False)
@@ -99,44 +95,44 @@ if submit_button:
     unique_id = str(int(time.time()))
     sugar_val = "—" if not_checked else str(int(sugar))
     
-    # 🌟 Format the EXACT time you selected in the sidebar input box
+    # Capture exactly what is written inside the input box at submission split-second
     formatted_time = log_time.strftime("%I:%M %p")
+    formatted_date = log_date.strftime("%Y-%m-%d")
     
     new_entry = {
-        "ID": unique_id, 
-        "Date": log_date.strftime("%Y-%m-%d"),
-        "Time of Reading": formatted_time, # 👈 Uses your selected time
-        "Timeframe": timeframe,
-        "Sugar Level (mg/dL)": sugar_val, 
-        "Bolus Dose (Units)": float(bolus),
-        "Basal Dose (Units)": float(basal), 
-        "Food Eaten": food if food else "None"
+        "ID": unique_id, "Date": formatted_date,
+        "Time of Reading": formatted_time, "Timeframe": timeframe,
+        "Sugar Level (mg/dL)": sugar_val, "Bolus Dose (Units)": float(bolus),
+        "Basal Dose (Units)": float(basal), "Food Eaten": food if food else "None"
     }
     
     # Send to cloud sheet instantly
     payload = {
-        "action": "add", 
-        "ID": unique_id, 
-        "Date": log_date.strftime("%Y-%m-%d"),
-        "Time_of_Reading": formatted_time, # 👈 Uses your selected time
-        "Timeframe": timeframe,
-        "Sugar": sugar_val, 
-        "Bolus": float(bolus), 
-        "Basal": float(basal), 
-        "Food": food if food else "None"
+        "action": "add", "ID": unique_id, "Date": formatted_date,
+        "Time_of_Reading": formatted_time, "Timeframe": timeframe,
+        "Sugar": sugar_val, "Bolus": float(bolus), "Basal": float(basal), "Food": food if food else "None"
     }
     sync_cloud(payload)
     
+    # Append locally and wipe time cache to reset for the next run
     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_entry])], ignore_index=True)
+    if "initial_time" in st.session_state:
+        del st.session_state.initial_time
+        
     st.sidebar.success("Entry synced to Cloud database!")
     st.rerun()
 
 # --- 5. DATA PORTAL & REPORT GENERATION ---
 st.header("📋 Historical Logs")
 
+# Quick manually triggered refresh button to pull any changes
+if st.button("🔄 Force Refresh from Cloud"):
+    st.session_state.data = load_data()
+    st.rerun()
+
 if not st.session_state.data.empty:
     
-    # 🛠️ FULL MODIFICATION & DELETION SYSTEM
+    # 🛠️ EDIT / MODIFY SYSTEM
     with st.expander("✏️ Click here to Edit / Modify ANY Existing Entry"):
         df_display = st.session_state.data.copy()
         df_display['Label'] = df_display['Date'] + " | " + df_display['Timeframe'] + " (" + df_display['Time of Reading'].astype(str) + ")"
@@ -175,18 +171,21 @@ if not st.session_state.data.empty:
         with col_btn1:
             if st.button("Save Changes", type="primary", key=f"btn_save_{selected_id}"):
                 mod_sugar = "—" if edit_not_checked else str(int(edit_sugar))
-                st.session_state.data.at[real_index, "Date"] = edit_date.strftime("%Y-%m-%d")
-                st.session_state.data.at[real_index, "Time of Reading"] = edit_time.strftime("%I:%M %p")
+                mod_time = edit_time.strftime("%I:%M %p")
+                mod_date = edit_date.strftime("%Y-%m-%d")
+                
+                st.session_state.data.at[real_index, "Date"] = mod_date
+                st.session_state.data.at[real_index, "Time of Reading"] = mod_time
                 st.session_state.data.at[real_index, "Timeframe"] = edit_timeframe
                 st.session_state.data.at[real_index, "Sugar Level (mg/dL)"] = mod_sugar
                 st.session_state.data.at[real_index, "Bolus Dose (Units)"] = float(edit_bolus)
                 st.session_state.data.at[real_index, "Basal Dose (Units)"] = float(edit_basal)
                 st.session_state.data.at[real_index, "Food Eaten"] = edit_food
                 
-                # Push modified details to cloud sheet
+                # Push modifications to cloud sheet
                 payload = {
-                    "action": "update", "ID": selected_id, "Date": edit_date.strftime("%Y-%m-%d"),
-                    "Time_of_Reading": edit_time.strftime("%I:%M %p"), "Timeframe": timeframe,
+                    "action": "update", "ID": selected_id, "Date": mod_date,
+                    "Time_of_Reading": mod_time, "Timeframe": edit_timeframe,
                     "Sugar": mod_sugar, "Bolus": float(edit_bolus), "Basal": float(edit_basal), "Food": edit_food
                 }
                 sync_cloud(payload)
@@ -218,10 +217,10 @@ if not st.session_state.data.empty:
         
     final_report = report_df.drop(columns=["ID", "Date_Parsed"], errors="ignore").iloc[::-1]
     
-    # Live Interactive Matrix
+    # Display table view
     st.dataframe(final_report, use_container_width=True)
     
-    # Download Action
+    # Download action
     csv_report = final_report.to_csv(index=False).encode('utf-8')
     st.download_button(
         label=f"📄 Download {report_filter} Report (Excel/CSV format)",
