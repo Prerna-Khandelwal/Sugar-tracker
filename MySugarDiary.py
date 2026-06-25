@@ -79,18 +79,31 @@ if submit_button:
     unique_id = str(int(time.time()))
     sugar_val = "—" if not_checked else str(int(sugar))
     
+    # 🌟 Format the EXACT time you selected in the sidebar input box
+    formatted_time = log_time.strftime("%I:%M %p")
+    
     new_entry = {
-        "ID": unique_id, "Date": log_date.strftime("%Y-%m-%d"),
-        "Time of Reading": log_time.strftime("%I:%M %p"), "Timeframe": timeframe,
-        "Sugar Level (mg/dL)": sugar_val, "Bolus Dose (Units)": float(bolus),
-        "Basal Dose (Units)": float(basal), "Food Eaten": food if food else "None"
+        "ID": unique_id, 
+        "Date": log_date.strftime("%Y-%m-%d"),
+        "Time of Reading": formatted_time, # 👈 Uses your selected time
+        "Timeframe": timeframe,
+        "Sugar Level (mg/dL)": sugar_val, 
+        "Bolus Dose (Units)": float(bolus),
+        "Basal Dose (Units)": float(basal), 
+        "Food Eaten": food if food else "None"
     }
     
     # Send to cloud sheet instantly
     payload = {
-        "action": "add", "ID": unique_id, "Date": log_date.strftime("%Y-%m-%d"),
-        "Time_of_Reading": log_time.strftime("%I:%M %p"), "Timeframe": timeframe,
-        "Sugar": sugar_val, "Bolus": float(bolus), "Basal": float(basal), "Food": food if food else "None"
+        "action": "add", 
+        "ID": unique_id, 
+        "Date": log_date.strftime("%Y-%m-%d"),
+        "Time_of_Reading": formatted_time, # 👈 Uses your selected time
+        "Timeframe": timeframe,
+        "Sugar": sugar_val, 
+        "Bolus": float(bolus), 
+        "Basal": float(basal), 
+        "Food": food if food else "None"
     }
     sync_cloud(payload)
     
