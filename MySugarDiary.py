@@ -40,12 +40,32 @@ if not st.session_state.authenticated:
 
 # --- 3. DATABASE SYNC ENGINE ---
 def load_data():
-    # If using direct sheets framework, fetch the dynamic online logs
-    # To keep your setup robust and free of complex structural errors, we load from session data state 
-    # backed up by your external secure sync link.
-    if "cloud_df" not in st.session_state:
-        st.session_state.cloud_df = pd.DataFrame(columns=["ID", "Date", "Time of Reading", "Timeframe", "Sugar Level (mg/dL)", "Bolus Dose (Units)", "Basal Dose (Units)", "Food Eaten"])
-    return st.session_state.cloud_df
+    try:
+        # 🌟 Automatically read live data from your Google Sheet on startup
+        # We clean the URL to make it a direct CSV download link
+        sheet_csv_url = WEB_APP_URL.replace("/exec", "/exec?action=read") 
+        
+        # If your Web App script isn't handling reading yet, we fallback to the public CSV export:
+        # A bulletproof way to read it directly using your SPREADSHEET_ID:
+        direct_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv"
+        
+        df = pd.read_csv(direct_url)
+        
+        if df.empty or "ID" not in df.columns:
+            return pd.DataFrame(columns=["ID", "Date", "Time of Reading", "Timeframe", "Sugar Level (mg/dL)", "Bolus Dose (Units)", "Basal Dose (Units)", "Food Eaten"])
+            
+        # Clean up column data types so they display beautifully
+        df['ID'] = df['ID'].astype(str)
+        df['Sugar Level (mg/dL)'] = df['Sugar Level (mg/dL)'].fillna("—").astype(str)
+        df['Bolus Dose (Units)'] = df['Bolus Dose (Units)'].fillna(0.0).astype(float)
+        df['Basal Dose (Units)'] = df['Basal Dose (Units)'].fillna(0.0).astype(float)
+        df['Food Eaten'] = df['Food Eaten'].fillna("None").astype(str)
+        return df
+    except Exception as e:
+        # Fallback to local memory if the internet connection dips momentarily
+        if "cloud_df" not in st.session_state:
+            st.session_state.cloud_df = pd.DataFrame(columns=["ID", "Date", "Time of Reading", "Timeframe", "Sugar Level (mg/dL)", "Bolus Dose (Units)", "Basal Dose (Units)", "Food Eaten"])
+        return st.session_state.cloud_df
 
 def sync_cloud(payload):
     try:
