@@ -7,7 +7,7 @@ import json
 import time
 
 # --- 1. CORE PROTECTION & DATABASE GATEWAY ---
-PASSWORD = "my_secret_password"  # 👈 Update to your personal secure login key!
+PASSWORD = "131984"  # 👈 Update to your personal secure login key!
 
 # 👈 Paste the exact Google Web App Deployment URL you copied from Step 1 here!
 WEB_APP_URL = "https://script.google.com/macros/s/XXXXXX/exec" 
