@@ -13,10 +13,14 @@ PASSWORD = "131984"  # 👈 Update to your personal secure login key!
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxDzIDjbO4o1VF04STIpDOUScNkOUcKZ03Lqd6bIwwGj8lrCPNIsg4CQdd55PjpPrAz/exec" 
 
 # 👈 Paste your exact Google Spreadsheet ID here so reading never fails!
-SPREADSHEET_ID = "https://docs.google.com/spreadsheets/d/1ZsGKQk5dOVi3gbg5L9fMY9R9xDo48r971diLoxO0J7w/edit?gid=0#gid=0" 
+# 👈 Paste the exact Google Web App Deployment URL you copied from Apps Script!
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxDzIDjbO4o1VF04STIpDOUScNkOUcKZ03Lqd6bIwwGj8lrCPNIsg4CQdd55PjpPrAz/exec" 
 
-# Direct fallback URL to read data as a raw CSV structure
-DATA_URL = f"https://docs.google.com/spreadsheets/d/1ZsGKQk5dOVi3gbg5L9fMY9R9xDo48r971diLoxO0J7w/edit?usp=sharing"
+# ✅ FIXED: Just the clean ID string extracted from your URL
+SPREADSHEET_ID = "1ZsGKQk5dOVi3gbg5L9fMY9R9xDo48r971diLoxO0J7w" 
+
+# ✅ FIXED: Corrected data retrieval endpoint string
+DATA_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv"
 
 st.set_page_config(page_title="Cloud Sugar Journal", layout="wide")
 
